@@ -3,6 +3,7 @@ from tkinter import ttk
 import json
 import websocket
 import threading
+import os
 
 CONFIG_PATH = "config.json"
 
@@ -41,6 +42,10 @@ class ConfigGUI:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("Veadotube Config Editor")
+        self.root.geometry("750x500")  # Set default window size to 750x500px
+
+        # Create default config if it doesn't exist
+        self.create_default_config()
 
         self.node_options = ["boolean:mini"]  # fallback
 
@@ -51,6 +56,26 @@ class ConfigGUI:
         tk.Button(top, text="Fetch Nodes", command=self.update_nodes).pack(side="left")
         tk.Button(top, text="Load", command=self.load).pack(side="left")
         tk.Button(top, text="Save", command=self.save).pack(side="left")
+
+        # CLIENT ID
+        tk.Label(self.root, text="Client ID").pack()
+        self.client_id_var = tk.StringVar()
+        tk.Entry(self.root, textvariable=self.client_id_var, width=50).pack()
+
+        # PROXY URL
+        tk.Label(self.root, text="Proxy URL").pack()
+        self.proxy_url_var = tk.StringVar()
+        tk.Entry(self.root, textvariable=self.proxy_url_var, width=50).pack()
+
+        # VEADO HOST
+        tk.Label(self.root, text="Veado Host").pack()
+        self.veado_host_var = tk.StringVar()
+        tk.Entry(self.root, textvariable=self.veado_host_var, width=50).pack()
+
+        # VEADO PORT
+        tk.Label(self.root, text="Veado Port").pack()
+        self.veado_port_var = tk.StringVar()
+        tk.Entry(self.root, textvariable=self.veado_port_var, width=50).pack()
 
         # LISTEN MAP
         tk.Label(self.root, text="Listen Map").pack()
@@ -71,6 +96,20 @@ class ConfigGUI:
         tk.Button(self.root, text="+ Add Send", command=self.add_send_row).pack()
 
         self.load()
+
+    def create_default_config(self):
+        """Create a default config file if it doesn't exist"""
+        if not os.path.exists(CONFIG_PATH):
+            default_config = {
+                "client_id": "clientGUI",
+                "proxy_url": "ws://localhost:8765",
+                "veado_host": "127.0.0.1",
+                "veado_port": 2424,
+                "listen_map": [],
+                "send_map": []
+            }
+            with open(CONFIG_PATH, "w") as f:
+                json.dump(default_config, f, indent=2)
 
     # -----------------------
     # NODE FETCH
@@ -134,6 +173,12 @@ class ConfigGUI:
             with open(CONFIG_PATH, "r") as f:
                 cfg = json.load(f)
 
+            # Load general settings
+            self.client_id_var.set(cfg.get("client_id", "clientGUI"))
+            self.proxy_url_var.set(cfg.get("proxy_url", "ws://localhost:8765"))
+            self.veado_host_var.set(cfg.get("veado_host", "127.0.0.1"))
+            self.veado_port_var.set(str(cfg.get("veado_port", 2424)))
+
             # clear
             for r in self.listen_rows:
                 r[0].destroy()
@@ -162,10 +207,10 @@ class ConfigGUI:
     # -----------------------
     def save(self):
         cfg = {
-            "client_id": "clientGUI",
-            "proxy_url": "ws://localhost:8765",
-            "veado_host": "127.0.0.1",
-            "veado_port": 2424,
+            "client_id": self.client_id_var.get(),
+            "proxy_url": self.proxy_url_var.get(),
+            "veado_host": self.veado_host_var.get(),
+            "veado_port": int(self.veado_port_var.get()) if self.veado_port_var.get().isdigit() else 2424,
             "listen_map": [],
             "send_map": []
         }
