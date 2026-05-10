@@ -2,7 +2,6 @@ import tkinter as tk
 from tkinter import ttk
 import json
 import websocket
-import threading
 import os
 
 CONFIG_PATH = "config.json"
