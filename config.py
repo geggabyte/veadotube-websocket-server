@@ -10,6 +10,7 @@ CONFIG_PATH = "config.json"
 # ---------------------------
 # VEADOTUBE NODE FETCHER
 # ---------------------------
+# TODO: This is outside of GUI scope, is not realying on config.json. Should be moved into scope an relied on config settings for veado host/port
 def fetch_nodes():
     nodes = []
 

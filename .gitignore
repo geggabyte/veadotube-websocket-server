@@ -1,2 +1,6 @@
 __pycache__/
 config.json
+bin/
+build/
+*.spec
+*.zip
