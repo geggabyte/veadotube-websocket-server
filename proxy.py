@@ -28,6 +28,7 @@ import threading
 import time
 import sys
 import os
+from config_manager import ConfigManager
 
 # Global variables for server control
 clients = set()
@@ -126,6 +127,18 @@ class ProxyServerGUI:
         """Run the server in a separate thread"""
         global server_running, server_instance
         
+        # Read port from config file using ConfigManager
+        try:
+            config_manager = ConfigManager("config.json")
+            config = config_manager.get()
+            port = config.get("proxy_port", 8765)
+            # Validate port number
+            if not isinstance(port, int) or port < 1 or port > 65535:
+                raise ValueError("Invalid port number")
+        except Exception as e:
+            print(f"Error reading config: {e}")
+            port = 8765  # fallback to default
+
         async def handler(ws):
             clients.add(ws)
             try:
@@ -142,9 +155,9 @@ class ProxyServerGUI:
             global server_running, server_instance
             server_running = True
             try:
-                server = await websockets.serve(handler, "0.0.0.0", 8765)
+                server = await websockets.serve(handler, "0.0.0.0", port)
                 server_instance = server
-                self.log_message("Server listening on ws://0.0.0.0:8765")
+                self.log_message(f"Server listening on ws://0.0.0.0:{port}")
                 await server.wait_closed()  # Wait for the server to close
             except Exception as e:
                 self.log_message(f"Server error: {e}")

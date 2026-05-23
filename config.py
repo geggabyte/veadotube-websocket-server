@@ -77,6 +77,11 @@ class ConfigGUI:
         self.veado_port_var = tk.StringVar()
         tk.Entry(self.root, textvariable=self.veado_port_var, width=50).pack()
 
+        # WEBSOCKET PORT
+        tk.Label(self.root, text="Proxy Server WebSocket Port").pack()
+        self.proxy_port_var = tk.StringVar()
+        tk.Entry(self.root, textvariable=self.proxy_port_var, width=50).pack()
+
         # LISTEN MAP
         tk.Label(self.root, text="Listen Map").pack()
         self.listen_frame = tk.Frame(self.root)
@@ -105,6 +110,7 @@ class ConfigGUI:
                 "proxy_url": "ws://localhost:8765",
                 "veado_host": "127.0.0.1",
                 "veado_port": 2424,
+                "proxy_port": 8765,
                 "listen_map": [],
                 "send_map": []
             }
@@ -178,6 +184,7 @@ class ConfigGUI:
             self.proxy_url_var.set(cfg.get("proxy_url", "ws://localhost:8765"))
             self.veado_host_var.set(cfg.get("veado_host", "127.0.0.1"))
             self.veado_port_var.set(str(cfg.get("veado_port", 2424)))
+            self.proxy_port_var.set(str(cfg.get("proxy_port", 8765)))
 
             # clear
             for r in self.listen_rows:
@@ -211,6 +218,7 @@ class ConfigGUI:
             "proxy_url": self.proxy_url_var.get(),
             "veado_host": self.veado_host_var.get(),
             "veado_port": int(self.veado_port_var.get()) if self.veado_port_var.get().isdigit() else 2424,
+            "proxy_port": int(self.proxy_port_var.get()) if self.proxy_port_var.get().isdigit() else 8765,
             "listen_map": [],
             "send_map": []
         }
