@@ -1,4 +1,27 @@
 # client.py
+"""
+WebSocket Bridge Client for Veadotube
+====================================
+
+This module implements a WebSocket bridge client that connects to both
+the Veadotube system and the proxy server, forwarding messages between them.
+
+The client handles:
+- Connecting to Veadotube WebSocket server
+- Listening to specific nodes in Veadotube
+- Forwarding messages to the proxy server
+- Receiving messages from the proxy server and applying them to Veadotube
+
+Classes:
+    Veado: Client for connecting to Veadotube WebSocket server
+    BridgeClient: Main client that bridges Veadotube and proxy
+
+Functions:
+    match_map: Check if a mapping matches a given type and ID
+    apply_map: Apply a mapping to transform data
+    main: Entry point for the client application
+"""
+
 import asyncio
 import json
 import websockets
@@ -11,6 +34,17 @@ from config_manager import ConfigManager
 # VEADOTUBE CLIENT (threaded)
 # ---------------------------
 class Veado:
+    """Client for connecting to Veadotube WebSocket server.
+    
+    This class handles the connection to the Veadotube WebSocket server,
+    listening for events, and sending messages.
+    
+    Attributes:
+        config: ConfigManager instance for reading configuration
+        ws: WebSocket connection to Veadotube
+        callbacks: List of callback functions to be notified of events
+    """
+    
     def __init__(self):
         self.config = ConfigManager()
         self.ws = websocket.WebSocket()
@@ -20,9 +54,11 @@ class Veado:
         threading.Thread(target=self._listen, daemon=True).start()
 
     def disconnect(self):
+        """Close the WebSocket connection to Veadotube."""
         self.ws.close()
 
     def _listen(self):
+        """Internal method to listen for messages from Veadotube."""
         while True:
             msg = self.ws.recv()
             if ":" not in msg:
@@ -34,11 +70,22 @@ class Veado:
                 cb(data)
 
     def send(self, payload):
+        """Send a payload to Veadotube.
+        
+        Args:
+            payload: The data to send to Veadotube
+        """
         msg = f"nodes: {json.dumps(payload)}"
         self.ws.send(msg)
         print(msg)
 
     def listen_node(self, t, i):
+        """Subscribe to a specific node in Veadotube.
+        
+        Args:
+            t: Type of the node
+            i: ID of the node
+        """
         self.send({
             "event": "payload",
             "type": t,
@@ -54,10 +101,29 @@ class Veado:
 # MAPPING LOGIC
 # ---------------------------
 def match_map(mapping, t, i):
+    """Check if a mapping matches a given type and ID.
+    
+    Args:
+        mapping: The mapping configuration
+        t: Type to match
+        i: ID to match
+        
+    Returns:
+        bool: True if the mapping matches, False otherwise
+    """
     return mapping["from"]["type"] == t and mapping["from"]["id"] == i
 
 
 def apply_map(mapping, value):
+    """Apply a mapping to transform data.
+    
+    Args:
+        mapping: The mapping configuration
+        value: The value to transform
+        
+    Returns:
+        dict: Transformed data
+    """
     return {
         "type": mapping["to"]["type"],
         "id": mapping["to"]["id"],
@@ -69,6 +135,19 @@ def apply_map(mapping, value):
 # MAIN CLIENT
 # ---------------------------
 class BridgeClient:
+    """Main bridge client that connects to both Veadotube and the proxy server.
+    
+    This class manages the connection to both the Veadotube system and the
+    proxy server, forwarding messages between them based on the configuration.
+    
+    Attributes:
+        loop: Asyncio event loop
+        veado: Veado instance for connecting to Veadotube
+        config: ConfigManager instance for reading configuration
+        pending_messages: Dictionary of messages waiting to be sent
+        send_interval: Interval between sending messages (in seconds)
+    """
+    
     def __init__(self):
         self.loop = None
         self.veado = Veado()
@@ -78,6 +157,11 @@ class BridgeClient:
         self.send_interval = 1 / 60  # 60Hz
 
     async def start(self):
+        """Start the bridge client.
+        
+        This method establishes connections to both Veadotube and the proxy server,
+        and starts the message forwarding loops.
+        """
         self.loop = asyncio.get_running_loop()
         self.proxy = await websockets.connect(self.config.read('proxy_url'))
         self.refresh_listeners()
