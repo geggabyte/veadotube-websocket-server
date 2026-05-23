@@ -16,7 +16,6 @@ from config_manager import ConfigManager
 
 class Veado:
     """Client for connecting to Veadotube WebSocket server."""
-    """
     
     def __init__(self, log_callback=None):
         self.config = ConfigManager()
