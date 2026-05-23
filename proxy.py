@@ -32,6 +32,7 @@ import os
 # Global variables for server control
 server_running = False
 clients = set()
+server_task = None
 
 class ProxyServerGUI:
     """GUI interface for managing the WebSocket proxy server.
@@ -102,7 +103,7 @@ class ProxyServerGUI:
     def start_server(self):
         """Start the proxy server in a separate thread"""
         if not server_running:
-            self.log_message("Starting server...")
+            self.log_message("Starting server. ..")
             self.start_button.config(state=tk.DISABLED)
             self.stop_button.config(state=tk.NORMAL)
             self.status_var.set("Server Running")
@@ -113,17 +114,22 @@ class ProxyServerGUI:
             
     def stop_server(self):
         """Stop the proxy server"""
-        global server_running
+        global server_running, server_task
         if server_running:
-            self.log_message("Stopping server...")
+            self.log_message("Stopping server. ..")
             server_running = False
+            
+            # Cancel the server task if it exists
+            if server_task and not server_task.done():
+                server_task.cancel()
+            
             self.start_button.config(state=tk.NORMAL)
             self.stop_button.config(state=tk.DISABLED)
             self.status_var.set("Server Stopped")
             
     def run_server(self):
         """Run the server in a separate thread"""
-        global server_running
+        global server_running, server_task
         
         async def handler(ws):
             clients.add(ws)
@@ -138,12 +144,14 @@ class ProxyServerGUI:
                 clients.remove(ws)
 
         async def main():
-            global server_running
+            global server_running, server_task
             server_running = True
             try:
-                async with websockets.serve(handler, "0.0.0.0", 8765):
-                    self.log_message("Server listening on ws://0.0.0.0:8765")
-                    await asyncio.Future()  # Run forever
+                server = await websockets.serve(handler, "0.0.0.0", 8765)
+                self.log_message("Server listening on ws://0.0.0.0:8765")
+                # Create a task for the server and store it for cancellation
+                server_task = asyncio.create_task(server.wait_closed())
+                await server_task  # Wait for the server to close
             except Exception as e:
                 self.log_message(f"Server error: {e}")
                 server_running = False
@@ -158,7 +166,7 @@ class ProxyServerGUI:
 def main():
     root = tk.Tk()
     app = ProxyServerGUI(root)
-    root.protocol("WM_DELETE_WINDOW", lambda: app.stop_server())
+    root.protocol("WM_DELETE_WINDOW", lambda: [app.stop_server(), root.destroy()])
     root.mainloop()
 
 if __name__ == "__main__":

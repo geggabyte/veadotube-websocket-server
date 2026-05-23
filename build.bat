@@ -1,8 +1,8 @@
 cls
 @echo off
 echo Building config.exe...
-python3 -m PyInstaller --name VeadotubeProxyClientConfig config.py -D -F --distpath ./bin
-python3 -m PyInstaller --onefile --windowed --name VeadotubeProxy proxy.py --distpath ./bin
+python3 -m PyInstaller --onefile --windowed --distpath ./bin --name VeadotubeProxyClientConfig config.py -D -F
+python3 -m PyInstaller --onefile --windowed --distpath ./bin --name VeadotubeProxy proxy.py -D -F
 echo.
 echo Build process completed.
 echo Copying python files to bin directory...
