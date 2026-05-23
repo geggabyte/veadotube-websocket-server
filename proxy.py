@@ -1,23 +1,6 @@
 # proxy.py
 """
 WebSocket Proxy Server for Veadotube
-==================================
-
-This module implements a WebSocket proxy server that forwards messages between
-connected clients. It provides both a GUI interface and command-line execution
-options.
-
-Features:
-- WebSocket proxy server with client management
-- GUI interface for monitoring the server
-- Real-time message logging
-- Cross-platform compatibility
-
-Classes:
-    ProxyServerGUI: GUI interface for managing the proxy server
-
-Functions:
-    main: Entry point for the application
 """
 
 import asyncio
@@ -33,17 +16,10 @@ from config_manager import ConfigManager
 # Global variables for server control
 clients = set()
 server_instance = None
+server_running = False
 
 class ProxyServerGUI:
-    """GUI interface for managing the WebSocket proxy server.
-    
-    This class provides a graphical user interface for monitoring the WebSocket proxy server.
-    
-    Attributes:
-        root: The main Tkinter window
-        status_var: Tkinter StringVar for displaying server status
-        log_text: ScrolledText widget for displaying server logs
-    """
+    """GUI interface for managing the WebSocket proxy server."""
     
     def __init__(self, root):
         self.root = root

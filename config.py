@@ -7,39 +7,11 @@ import os
 CONFIG_PATH = "config.json"
 
 
-# ---------------------------
-# VEADOTUBE NODE FETCHER
-# ---------------------------
-# TODO: This is outside of GUI scope, is not realying on config.json. Should be moved into scope an relied on config settings for veado host/port
-def fetch_nodes():
-    nodes = []
-
-    try:
-        ws = websocket.WebSocket()
-        ws.connect("ws://127.0.0.1:2424?n=ConfigEditor")
-        ws.recv()
-        ws.send('nodes: {"event":"list"}')
-
-        msg = ws.recv()
-        print(msg)
-        _, data = msg.split(":", 1)
-        data = json.loads(data.strip())
-
-        for entry in data.get("entries", []):
-            nodes.append(f"{entry['type']}:{entry['id']}")
-
-        ws.close()
-    except Exception as e:
-        print("[FETCH ERROR]", e)
-
-    return nodes
-
-
-# ---------------------------
-# GUI
-# ---------------------------
 class ConfigGUI:
+    """GUI interface for editing Veadotube configuration."""
+    
     def __init__(self):
+        """Initialize the configuration GUI."""
         self.root = tk.Tk()
         self.root.title("Veadotube Config Editor")
         self.root.geometry("750x500")  # Set default window size to 750x500px

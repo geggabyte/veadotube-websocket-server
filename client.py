@@ -1,25 +1,6 @@
 # client.py
 """
 WebSocket Bridge Client for Veadotube
-====================================
-
-This module implements a WebSocket bridge client that connects to both
-the Veadotube system and the proxy server, forwarding messages between them.
-
-The client handles:
-- Connecting to Veadotube WebSocket server
-- Listening to specific nodes in Veadotube
-- Forwarding messages to the proxy server
-- Receiving messages from the proxy server and applying them to Veadotube
-
-Classes:
-    Veado: Client for connecting to Veadotube WebSocket server
-    BridgeClient: Main client that bridges Veadotube and proxy
-
-Functions:
-    match_map: Check if a mapping matches a given type and ID
-    apply_map: Apply a mapping to transform data
-    main: Entry point for the client application
 """
 
 import asyncio
@@ -33,19 +14,8 @@ import time
 from config_manager import ConfigManager
 
 
-# ---------------------------
-# VEADOTUBE CLIENT (threaded)
-# ---------------------------
 class Veado:
-    """Client for connecting to Veadotube WebSocket server.
-    
-    This class handles the connection to the Veadotube WebSocket server,
-    listening for events, and sending messages.
-    
-    Attributes:
-        config: ConfigManager instance for reading configuration
-        ws: WebSocket connection to Veadotube
-        callbacks: List of callback functions to be notified of events
+    """Client for connecting to Veadotube WebSocket server."""
     """
     
     def __init__(self, log_callback=None):
