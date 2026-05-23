@@ -1,7 +1,7 @@
 # proxy.py
 """
 WebSocket Proxy Server for Veadotube
-====================================
+==================================
 
 This module implements a WebSocket proxy server that forwards messages between
 connected clients. It provides both a GUI interface and command-line execution
@@ -9,7 +9,7 @@ options.
 
 Features:
 - WebSocket proxy server with client management
-- GUI interface for starting/stopping the server
+- GUI interface for monitoring the server
 - Real-time message logging
 - Cross-platform compatibility
 
@@ -30,23 +30,18 @@ import sys
 import os
 
 # Global variables for server control
-server_running = False
 clients = set()
-server_task = None
+server_instance = None
 
 class ProxyServerGUI:
     """GUI interface for managing the WebSocket proxy server.
     
-    This class provides a graphical user interface for starting, stopping,
-    and monitoring the WebSocket proxy server.
+    This class provides a graphical user interface for monitoring the WebSocket proxy server.
     
     Attributes:
         root: The main Tkinter window
         status_var: Tkinter StringVar for displaying server status
-        start_button: Button to start the server
-        stop_button: Button to stop the server
         log_text: ScrolledText widget for displaying server logs
-        server_thread: Thread object for running the server
     """
     
     def __init__(self, root):
@@ -56,13 +51,13 @@ class ProxyServerGUI:
         
         # Server status
         self.status_var = tk.StringVar()
-        self.status_var.set("Server Stopped")
+        self.status_var.set("Server Running")
         
         # Create UI elements
         self.create_widgets()
         
-        # Server thread
-        self.server_thread = None
+        # Start server automatically when GUI is initialized
+        self.start_server()
         
     def create_widgets(self):
         # Status frame
@@ -71,16 +66,6 @@ class ProxyServerGUI:
         
         tk.Label(status_frame, text="Server Status:").pack(side=tk.LEFT)
         tk.Label(status_frame, textvariable=self.status_var, fg="red").pack(side=tk.LEFT, padx=5)
-        
-        # Control buttons
-        control_frame = tk.Frame(self.root)
-        control_frame.pack(fill=tk.X, padx=10, pady=5)
-        
-        self.start_button = tk.Button(control_frame, text="Start Server", command=self.start_server)
-        self.start_button.pack(side=tk.LEFT, padx=5)
-        
-        self.stop_button = tk.Button(control_frame, text="Stop Server", command=self.stop_server, state=tk.DISABLED)
-        self.stop_button.pack(side=tk.LEFT, padx=5)
         
         # Log display
         log_frame = tk.LabelFrame(self.root, text="Server Logs")
@@ -91,7 +76,7 @@ class ProxyServerGUI:
         
         # Add some initial log messages
         self.log_message("Veadotube Proxy Server UI")
-        self.log_message("Ready to start server...")
+        self.log_message("Server running automatically...")
         
     def log_message(self, message):
         """Add a message to the log display"""
@@ -102,34 +87,44 @@ class ProxyServerGUI:
         
     def start_server(self):
         """Start the proxy server in a separate thread"""
-        if not server_running:
-            self.log_message("Starting server. ..")
-            self.start_button.config(state=tk.DISABLED)
-            self.stop_button.config(state=tk.NORMAL)
-            self.status_var.set("Server Running")
-            
-            # Start server in a separate thread
-            self.server_thread = threading.Thread(target=self.run_server, daemon=True)
-            self.server_thread.start()
+        # Start server in a separate thread
+        self.server_thread = threading.Thread(target=self.run_server, daemon=True)
+        self.server_thread.start()
             
     def stop_server(self):
         """Stop the proxy server"""
-        global server_running, server_task
+        global server_running, server_instance
         if server_running:
             self.log_message("Stopping server. ..")
             server_running = False
             
-            # Cancel the server task if it exists
-            if server_task and not server_task.done():
-                server_task.cancel()
+            # Close all connected clients
+            for client in clients.copy():
+                try:
+                    client.close()
+                except:
+                    pass
+            clients.clear()
             
-            self.start_button.config(state=tk.NORMAL)
-            self.stop_button.config(state=tk.DISABLED)
+            # Close the server instance if it exists
+            if server_instance:
+                try:
+                    # Properly close the server
+                    server_instance.close()
+                    # Wait for server to actually close using a temporary loop
+                    temp_loop = asyncio.new_event_loop()
+                    try:
+                        temp_loop.run_until_complete(server_instance.wait_closed())
+                    finally:
+                        temp_loop.close()
+                except Exception as e:
+                    self.log_message(f"Error closing server: {e}")
+            
             self.status_var.set("Server Stopped")
             
     def run_server(self):
         """Run the server in a separate thread"""
-        global server_running, server_task
+        global server_running, server_instance
         
         async def handler(ws):
             clients.add(ws)
@@ -144,21 +139,26 @@ class ProxyServerGUI:
                 clients.remove(ws)
 
         async def main():
-            global server_running, server_task
+            global server_running, server_instance
             server_running = True
             try:
                 server = await websockets.serve(handler, "0.0.0.0", 8765)
+                server_instance = server
                 self.log_message("Server listening on ws://0.0.0.0:8765")
-                # Create a task for the server and store it for cancellation
-                server_task = asyncio.create_task(server.wait_closed())
-                await server_task  # Wait for the server to close
+                await server.wait_closed()  # Wait for the server to close
             except Exception as e:
                 self.log_message(f"Server error: {e}")
                 server_running = False
 
-        # Run the server
+        # Run the server in a new event loop
         try:
-            asyncio.run(main())
+            # Create a new event loop for this server instance
+            server_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(server_loop)
+            try:
+                server_loop.run_until_complete(main())
+            finally:
+                server_loop.close()
         except Exception as e:
             self.log_message(f"Server error: {e}")
             server_running = False
@@ -166,7 +166,10 @@ class ProxyServerGUI:
 def main():
     root = tk.Tk()
     app = ProxyServerGUI(root)
-    root.protocol("WM_DELETE_WINDOW", lambda: [app.stop_server(), root.destroy()])
+    def on_closing():
+        app.stop_server()
+        root.destroy()
+    root.protocol("WM_DELETE_WINDOW", on_closing)
     root.mainloop()
 
 if __name__ == "__main__":
