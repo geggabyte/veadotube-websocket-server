@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -)",
+      "Bash(python3 -c ' *)",
+      "Bash(python3 smoketest.py)",
+      "Bash(netstat -ano -p TCP)",
+      "Bash(git rm *)",
+      "Bash(python3 -m PyInstaller --noconfirm --clean --onefile --windowed --name VeadotubeBridge --distpath ./bin --workpath ./build --specpath ./build --collect-submodules websockets --hidden-import websocket main.py)",
+      "Bash(rm -rf build)",
+      "Bash(./bin/VeadotubeBridge.exe)",
+      "Bash(tasklist //FI \"IMAGENAME eq VeadotubeBridge.exe\" //NH)",
+      "Bash(timeout 30 python3 -)",
+      "Bash(python3 -m pip install pyflakes --quiet --disable-pip-version-check)",
+      "Bash(python3 -m pyflakes veadobridge/*.py main.py smoketest.py)",
+      "Bash(rm -f /tmp/vb-test-config.json)",
+      "Bash(rm -rf logs runtime bin/logs bin/runtime build __pycache__ veadobridge/__pycache__)",
+      "Bash(timeout 20 python3 -)"
+    ]
+  }
+}

@@ -2,5 +2,8 @@ __pycache__/
 config.json
 bin/
 build/
+dist/
+logs/
+runtime/
 *.spec
 *.zip
