@@ -17,6 +17,7 @@ import threading
 import websockets
 from websockets.asyncio.client import connect
 
+from .nodes import parse_node_list
 from .service import RUNNING, AsyncService
 from .veado import CONNECTED, VeadoLink
 
@@ -24,8 +25,11 @@ from .veado import CONNECTED, VeadoLink
 class ClientService(AsyncService):
     name = "client"
 
-    def __init__(self, config, on_state=None):
+    def __init__(self, config, on_state=None, on_nodes=None):
         super().__init__(config, on_state=on_state)
+        # Called with [(key, name), ...] whenever Veadotube reports its node
+        # list - on connect and again each time the list changes.
+        self.on_nodes = on_nodes
         self.veado = None
         self._proxy_ws = None
         self._pending = {}
@@ -161,6 +165,9 @@ class ClientService(AsyncService):
         link = self.veado
         if link is None:
             return
+        # Subscribe to the node list itself, so the Configuration tab always
+        # offers what this Veadotube actually has rather than a remembered set.
+        link.listen_nodes()
         nodes = self.config.read("listen_map", [])
         for node in nodes:
             link.listen_node(node["type"], node["id"])
@@ -168,7 +175,15 @@ class ClientService(AsyncService):
             self.log.info("Subscribed to %d Veadotube node(s)", len(nodes))
 
     def _on_veado_event(self, data):
-        if not isinstance(data, dict) or data.get("event") != "payload":
+        if not isinstance(data, dict):
+            return
+
+        entries = parse_node_list(data)
+        if entries is not None:
+            self._on_node_list(entries)
+            return
+
+        if data.get("event") != "payload":
             return
         node_type, node_id = data.get("type"), data.get("id")
         if node_type is None or node_id is None or "payload" not in data:
@@ -197,6 +212,34 @@ class ClientService(AsyncService):
             self.log.debug(
                 "Veadotube -> proxy: %s:%s = %s (%d mapping(s))",
                 node_type, node_id, _clip(value), matched,
+            )
+
+    def _on_node_list(self, entries):
+        self.log.debug(
+            "Veadotube listed %d node(s): %s",
+            len(entries), ", ".join(key for key, _name in entries),
+        )
+        self._warn_about_missing_nodes(entries)
+        if self.on_nodes:
+            try:
+                self.on_nodes(entries)
+            except Exception:
+                self.log.exception("Handling the Veadotube node list failed")
+
+    def _warn_about_missing_nodes(self, entries):
+        """A listen_map entry Veadotube does not have will never fire. Say so."""
+        available = {key for key, _name in entries}
+        if not available:
+            return
+        missing = [
+            "%s:%s" % (node["type"], node["id"])
+            for node in self.config.read("listen_map", [])
+            if "%s:%s" % (node["type"], node["id"]) not in available
+        ]
+        if missing:
+            self.log.warning(
+                "Veadotube does not have these nodes, so they will never report: %s. "
+                "Check the listen map on the Configuration tab.", ", ".join(missing),
             )
 
     # ---------------------------------------------------------------- sending

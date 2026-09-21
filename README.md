@@ -79,6 +79,18 @@ python main.py
 3. Add the nodes you want to share to the **listen map**, as `type:id` - for
    example `boolean:IMaxMouth`. The id is the name you gave the node in
    Veadotube.
+
+   The drop-downs are filled from the running Veadotube itself, and each node's
+   display name is shown beside it. While the bridge client is running it stays
+   subscribed to Veadotube's node list, so switching scene or avatar updates the
+   drop-downs on its own; otherwise the list is read at startup, when you open
+   the tab, and on **Refresh nodes**.
+
+   Nothing is remembered between reads, so a node you renamed in Veadotube stops
+   being offered. A mapping still pointing at a node Veadotube no longer reports
+   is kept - saving never rewrites your config behind your back - but marked
+   *not reported by Veadotube*, and the log names it on connect, since such a
+   mapping can never fire.
 4. Add a **send map** row for each one, mapping your node onto the node it
    should drive on the other machine.
 5. Tick the services this machine should run - *Start the proxy server on

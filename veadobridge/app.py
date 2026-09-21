@@ -80,7 +80,9 @@ class Application:
         self.proxy = ProxyService(
             self.config, on_state=self._on_service_state, on_port_conflict=self._on_port_conflict
         )
-        self.client = ClientService(self.config, on_state=self._on_service_state)
+        self.client = ClientService(
+            self.config, on_state=self._on_service_state, on_nodes=self._on_nodes_listed
+        )
         self.config.register_callback(self._on_config_changed)
 
         self.root = tk.Tk()
@@ -150,6 +152,14 @@ class Application:
     def _on_service_state(self, name, state):
         if self.window is not None:
             self.window.queue_state(name, state)
+
+    def _on_nodes_listed(self, entries):
+        """Veadotube pushed its node list to the running client - show it."""
+        if self.window is None or self.root is None or self._shutting_down:
+            return
+        cfg = self.config.get()
+        source = (str(cfg["veado_host"]), str(cfg["veado_port"]))
+        self._on_ui_thread(lambda: self.window.config_view.set_live_nodes(entries, source))
 
     # ------------------------------------------------------------------ config
     def on_config_saved(self, cfg):

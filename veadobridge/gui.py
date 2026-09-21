@@ -40,6 +40,7 @@ class MainWindow:
         self.controller = controller
         self.history = collections.deque(maxlen=MAX_LOG_LINES)
         self._pending_states = collections.deque()
+        self._veado_status = None
         self._closing = False
 
         root.title("%s %s" % (APP_NAME, VERSION))
@@ -61,6 +62,7 @@ class MainWindow:
         )
         notebook.add(self.dashboard, text="Dashboard")
         notebook.add(self.config_view, text="Configuration")
+        notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
         panes.add(notebook, weight=3)
 
         panes.add(self._build_log(panes), weight=4)
@@ -229,8 +231,23 @@ class MainWindow:
         else:
             self.proxy_stats.configure(text="")
 
+    def _on_tab_changed(self, event):
+        try:
+            current = event.widget.nametowidget(event.widget.select())
+        except (tk.TclError, KeyError):
+            return
+        if current is self.config_view:
+            self.config_view.on_shown()
+
     def _render_client(self, state):
         stats = state.stats
+        # A fresh Veadotube connection is the moment its node list is worth
+        # re-reading: the avatar (and with it the nodes) may have changed.
+        veado_status = stats.get("veado") if state.phase == RUNNING else None
+        if veado_status != self._veado_status:
+            self._veado_status = veado_status
+            if veado_status == "connected":
+                self.config_view.on_veado_connected()
         if state.phase == RUNNING:
             veado_ok = stats.get("veado") == "connected"
             proxy_ok = stats.get("proxy") == "connected"

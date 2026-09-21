@@ -92,6 +92,18 @@ class VeadoLink:
                 )
             return False
 
+    def list_nodes(self):
+        """Ask the nodes channel for the current node list, once."""
+        return self.send({"event": "list"})
+
+    def listen_nodes(self, token="sync-nodes"):
+        """Ask for the node list now and again whenever it changes.
+
+        This is the nodes channel itself, not a single node: the event sits at
+        the top level rather than inside a `payload`.
+        """
+        return self.send({"event": "listen", "token": token})
+
     def listen_node(self, node_type, node_id):
         """Subscribe to a node so Veadotube pushes its changes to us."""
         return self.send(

@@ -34,25 +34,36 @@ changing it).
 - [ ] Confirm the payload shape for a number node
 - [ ] Confirm the payload shape for a "state events" node
 
-### 2. Node listing does not work on Veadotube 0.6
+### 2. Node listing works on Veadotube 0.6 - RESOLVED
 
-I implemented the **Fetch nodes** button, then tested it against your running
-Veadotube. It does not answer. I tried `nodes:{"event":"list"}`,
-`nodes: {"event":"list"}`, `list:{}` and a couple of variants - all silence.
-The only thing 0.6 sends unprompted is its instance banner:
+I previously concluded 0.6 does not answer node list requests. That was wrong.
+The request was always correct; the **reply was being thrown away**. Per the
+[nodes channel docs](https://veado.tube/docs/tech/api/nodes/) the answer comes
+back in an `entries` array, but `nodes.py` was reading a `nodes` key, so every
+reply parsed to nothing and the UI reported "Veadotube did not send a list".
+
+Probing your running instance confirms it answers straight away:
 
 ```
-instance:{"name":"veadotube - GenaPlaythrough.veado","id":"veado-...","version":"0.6",
-          "language":"en","server":"127.0.0.1:2424","event":"info"}
+instance:{"name":"veadotube - Playthrough-Scene.veadoscene","version":"0.6",...}
+nodes:{"event":"list","entries":[
+  {"type":"boolean","id":"MaxKeyboardPress","name":"MaxKeyboardPress"},
+  {"type":"boolean","id":"MaxMousePress","name":"MaxMousePress"},
+  {"type":"number","id":"MaxMousePosition","name":"MaxMousePosition"},
+  {"type":"stateEvents","id":"MaxMouthState","name":"MaxMouthState"}]}
 ```
 
-So right now the button connects, gets nothing, and tells the user to type node
-names by hand. That is honest but not useful.
+Fixed, and the list is now read live rather than fetched once: the bridge client
+sends `nodes: {"event":"listen"}`, so Veadotube pushes a new list whenever it
+changes (switching scene or avatar), and the Configuration tab follows it.
 
-- [ ] Do you know the correct request for the full app? (mini documents
-      `nodes: {"event":"list"}` - maybe 0.6 dropped it, maybe it needs a token)
-- [ ] If there is no way: should I drop the button entirely, or leave it in case
-      a future Veadotube version supports it?
+**This needs your eyes:** the node ids in `config.json` (`IMaxBodyCard`,
+`IMaxBodyAudience`, `IMaxMouth`) do not match any node in the instance above.
+As it stands the listen map subscribes to three nodes that do not exist and
+nothing will ever be forwarded.
+
+- [ ] Do those `I…`/`O…` nodes live in a different scene than
+      `Playthrough-Scene.veadoscene`, or is the config simply out of date?
 
 ### 3. Should a leftover copy be stopped automatically?
 

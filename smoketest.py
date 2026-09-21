@@ -25,6 +25,7 @@ from veadobridge.client import ClientService
 from veadobridge.config import ConfigManager, validate
 from veadobridge.logbus import setup_logging
 from veadobridge.netutil import PortInUse, bind_listen_socket, find_listener_pid, port_is_free
+from veadobridge.nodes import parse_node_list
 from veadobridge.proxy import ProxyService
 from veadobridge.singleton import AlreadyRunning, InstanceLock
 
@@ -126,14 +127,46 @@ def test_singleton(tmp):
     keeper.release()
 
 
+# ---------------------------------------------------------------------- nodes
+def test_nodes():
+    """The list reply shape, exactly as the nodes channel documents it."""
+    entries = parse_node_list({
+        "event": "list",
+        "entries": [
+            {"type": "boolean", "id": "mini", "name": "push-to-talk"},
+            {"type": "stateEvents", "id": "mini", "name": "avatar state"},
+        ],
+    })
+    check("nodes: a documented list reply parses",
+          entries == [("boolean:mini", "push-to-talk"), ("stateEvents:mini", "avatar state")],
+          str(entries))
+    check("nodes: ids are unique per type, not on their own",
+          entries is not None and len({key for key, _name in entries}) == 2, str(entries))
+    check("nodes: a payload event is not a node list",
+          parse_node_list({"event": "payload", "type": "boolean", "id": "mini"}) is None)
+    check("nodes: an entry with no id is unaddressable and dropped",
+          parse_node_list({"event": "list", "entries": [{"type": "boolean", "name": "x"}]}) == [],
+          "a display name is not an id")
+    check("nodes: an empty list differs from 'not a list'",
+          parse_node_list({"event": "list", "entries": []}) == [])
+
+
 # ------------------------------------------------------------- fake veadotube
 class FakeVeadotube:
     """Just enough of Veadotube to exercise the client: `nodes: {json}` framing."""
+
+    #: What this instance answers a nodes-channel `list` event with.
+    NODES = [
+        {"type": "boolean", "id": "mini", "name": "push-to-talk"},
+        {"type": "stateEvents", "id": "mini", "name": "avatar state"},
+        {"type": "boolean", "id": "SourceNode", "name": "the source"},
+    ]
 
     def __init__(self):
         self.port = free_port()
         self.received = []
         self.subscriptions = []
+        self.list_requests = []
         self._connections = set()
         self._loop = None
         self._ready = threading.Event()
@@ -177,8 +210,16 @@ class FakeVeadotube:
                 if ":" not in raw:
                     continue
                 body = json.loads(raw.split(":", 1)[1])
+                event = body.get("event")
                 payload = body.get("payload", {})
-                if isinstance(payload, dict) and payload.get("event") == "listen":
+                if event in ("list", "listen", "unlisten") and "payload" not in body:
+                    # The nodes channel itself, not one node: no payload object.
+                    self.list_requests.append(event)
+                    if event != "unlisten":
+                        await connection.send(
+                            "nodes: " + json.dumps({"event": "list", "entries": self.NODES})
+                        )
+                elif isinstance(payload, dict) and payload.get("event") == "listen":
                     self.subscriptions.append((body.get("type"), body.get("id")))
                 else:
                     self.received.append(body)
@@ -229,7 +270,8 @@ def test_bridge(tmp):
         client_id="receiver", proxy_url=url, veado_host="127.0.0.1", veado_port=veado_b.port,
         listen_map=[], send_map=[],
     )
-    sender = ClientService(sender_cfg)
+    listed = []
+    sender = ClientService(sender_cfg, on_nodes=listed.append)
     receiver = ClientService(receiver_cfg)
     check("client: sender starts", sender.start())
     check("client: receiver starts", receiver.start())
@@ -238,6 +280,13 @@ def test_bridge(tmp):
         check("client: subscribes to its listen_map",
               wait_for(lambda: ("boolean", "SourceNode") in veado_a.subscriptions),
               str(veado_a.subscriptions))
+        check("client: subscribes to the node list itself",
+              wait_for(lambda: "listen" in veado_a.list_requests), str(veado_a.list_requests))
+        check("client: the reported node list reaches the app",
+              wait_for(lambda: listed and ("stateEvents:mini", "avatar state") in listed[-1]),
+              str(listed))
+        check("client: a node list is not mistaken for a node change",
+              not any(m.get("event") == "list" for m in veado_a.received), str(veado_a.received))
         check("client: both clients reach the proxy",
               wait_for(lambda: proxy.client_count == 2), "connected: %d" % proxy.client_count)
 
@@ -284,6 +333,7 @@ def main():
 
     with tempfile.TemporaryDirectory(prefix="veadobridge-selftest-") as tmp:
         test_config(tmp)
+        test_nodes()
         test_netutil()
         test_singleton(tmp)
         test_bridge(tmp)
