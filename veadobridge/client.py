@@ -18,6 +18,7 @@ import websockets
 from websockets.asyncio.client import connect
 
 from .nodes import parse_node_list
+from .payloads import read_range, read_value
 from .service import RUNNING, AsyncService
 from .veado import CONNECTED, VeadoLink
 
@@ -152,7 +153,7 @@ class ClientService(AsyncService):
         if link is None or not link.connected:
             self.log.debug("Veadotube is not connected - update dropped")
             return
-        link.set_node(data["type"], data["id"], data["value"])
+        link.set_node(data["type"], data["id"], data["value"], data.get("range"))
 
     # ----------------------------------------------------------- veado side
     def _on_veado_state(self, status, detail):
@@ -189,7 +190,17 @@ class ClientService(AsyncService):
         if node_type is None or node_id is None or "payload" not in data:
             return
 
-        value = data["payload"]
+        # Reduce the reported payload to a plain value: each node type reports a
+        # different shape, and the far side may well be a different type again.
+        payload = data["payload"]
+        value = read_value(node_type, payload)
+        if value is None:
+            self.log.debug(
+                "%s:%s reported nothing to forward: %s", node_type, node_id, _clip(payload)
+            )
+            return
+        value_range = read_range(node_type, payload)
+
         client_id = self.config.read("client_id")
         matched = 0
         for mapping in self.config.read("send_map", []):
@@ -203,6 +214,8 @@ class ClientService(AsyncService):
                 "id": target["id"],
                 "value": value,
             }
+            if value_range and target["type"] == source["type"]:
+                message["range"] = value_range
             with self._pending_lock:
                 # Keyed by target node: only the newest value per node is sent.
                 self._pending[(target["type"], target["id"])] = message

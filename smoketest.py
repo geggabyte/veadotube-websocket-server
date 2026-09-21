@@ -26,6 +26,7 @@ from veadobridge.config import ConfigManager, validate
 from veadobridge.logbus import setup_logging
 from veadobridge.netutil import PortInUse, bind_listen_socket, find_listener_pid, port_is_free
 from veadobridge.nodes import parse_node_list
+from veadobridge.payloads import read_range, read_value, set_payload
 from veadobridge.proxy import ProxyService
 from veadobridge.singleton import AlreadyRunning, InstanceLock
 
@@ -151,6 +152,37 @@ def test_nodes():
           parse_node_list({"event": "list", "entries": []}) == [])
 
 
+# ------------------------------------------------------------------- payloads
+def test_payloads():
+    """The real shapes, copied from a live veadotube 0.6 instance."""
+    check("payload: a boolean reports a bare scalar",
+          read_value("boolean", False) is False, str(read_value("boolean", False)))
+    check("payload: a boolean accepts 1/0 as well", read_value("boolean", 1) is True)
+    check("payload: an unset boolean has no value", read_value("boolean", {}) is None)
+    check("payload: a number reports a value with its range",
+          read_value("number", {"value": 0.43, "min": -1, "max": 1}) == 0.43)
+    check("payload: the range is read alongside",
+          read_range("number", {"value": 0.43, "min": -1, "max": 1}) == {"min": -1, "max": 1})
+    check("payload: a state reports a state id, not a value",
+          read_value("stateEvents", {"event": "peek", "state": "talking"}) == "talking")
+    check("payload: an empty state stack has nothing to forward",
+          read_value("stateEvents", {"event": "peek", "state": ""}) is None)
+    check("payload: a state list is not a state report",
+          read_value("stateEvents", {"event": "list", "states": []}) is None)
+
+    check("payload: setting a boolean uses value",
+          set_payload("boolean", True) == {"event": "set", "value": True})
+    check("payload: setting a state uses state, not value",
+          set_payload("stateEvents", "talking") == {"event": "set", "state": "talking"},
+          str(set_payload("stateEvents", "talking")))
+    check("payload: setting a number keeps the range it came with",
+          set_payload("number", 0.43, {"min": -1, "max": 1})
+          == {"event": "set", "value": {"min": -1, "max": 1, "value": 0.43}},
+          str(set_payload("number", 0.43, {"min": -1, "max": 1})))
+    check("payload: a state name cannot be applied to a number node",
+          set_payload("number", "talking") is None)
+
+
 # ------------------------------------------------------------- fake veadotube
 class FakeVeadotube:
     """Just enough of Veadotube to exercise the client: `nodes: {json}` framing."""
@@ -261,9 +293,12 @@ def test_bridge(tmp):
     sender_cfg = write_config(
         tmp, "sender.json",
         client_id="sender", proxy_url=url, veado_host="127.0.0.1", veado_port=veado_a.port,
-        listen_map=[{"type": "boolean", "id": "SourceNode"}],
+        listen_map=[{"type": "boolean", "id": "SourceNode"},
+                    {"type": "stateEvents", "id": "SourceState"}],
         send_map=[{"from": {"type": "boolean", "id": "SourceNode"},
-                   "to": {"type": "boolean", "id": "TargetNode"}}],
+                   "to": {"type": "boolean", "id": "TargetNode"}},
+                  {"from": {"type": "stateEvents", "id": "SourceState"},
+                   "to": {"type": "stateEvents", "id": "TargetState"}}],
     )
     receiver_cfg = write_config(
         tmp, "receiver.json",
@@ -303,6 +338,26 @@ def test_bridge(tmp):
                   json.dumps(applied))
         check("bridge: the sender does not echo to itself", not veado_a.received, str(veado_a.received))
 
+        # State events: a state id, never a "value".
+        veado_a.push("stateEvents", "SourceState", {"event": "peek", "state": "talking"})
+        check("bridge: a state event arrives on the far side",
+              wait_for(lambda: any(m.get("id") == "TargetState" for m in veado_b.received)),
+              str(veado_b.received))
+        if any(m.get("id") == "TargetState" for m in veado_b.received):
+            applied = [m for m in veado_b.received if m.get("id") == "TargetState"][-1]
+            check("bridge: it is set as a state id, not a value",
+                  applied["payload"] == {"event": "set", "state": "talking"},
+                  json.dumps(applied["payload"]))
+
+        # An empty stack and a state list carry nothing and must not be forwarded.
+        before_state = len([m for m in veado_b.received if m.get("id") == "TargetState"])
+        veado_a.push("stateEvents", "SourceState", {"event": "list", "states": []})
+        veado_a.push("stateEvents", "SourceState", {"event": "peek", "state": ""})
+        time.sleep(0.4)
+        check("bridge: an empty stack and a state list are not forwarded",
+              len([m for m in veado_b.received if m.get("id") == "TargetState"]) == before_state,
+              str(veado_b.received))
+
         # Coalescing: a burst of updates must not become a burst of messages.
         before = sender.sent_to_proxy
         for index in range(50):
@@ -334,6 +389,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="veadobridge-selftest-") as tmp:
         test_config(tmp)
         test_nodes()
+        test_payloads()
         test_netutil()
         test_singleton(tmp)
         test_bridge(tmp)

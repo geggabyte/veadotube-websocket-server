@@ -19,6 +19,7 @@ import time
 import websocket
 
 from .logbus import get_logger
+from .payloads import set_payload
 
 log = get_logger("veado")
 
@@ -115,14 +116,16 @@ class VeadoLink:
             }
         )
 
-    def set_node(self, node_type, node_id, value):
+    def set_node(self, node_type, node_id, value, value_range=None):
+        """Apply a plain value to a node, in whatever shape that type accepts."""
+        payload = set_payload(node_type, value, value_range)
+        if payload is None:
+            log.debug(
+                "%s:%s cannot take the value %r - update dropped", node_type, node_id, value
+            )
+            return False
         return self.send(
-            {
-                "event": "payload",
-                "type": node_type,
-                "id": node_id,
-                "payload": {"event": "set", "value": value},
-            }
+            {"event": "payload", "type": node_type, "id": node_id, "payload": payload}
         )
 
     # ---------------------------------------------------------------- threads
